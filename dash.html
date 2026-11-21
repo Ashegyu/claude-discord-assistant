@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>내 대시보드</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; margin: 0; background: #f4f4f1; color: #1c1c1a; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px 14px 40px; }
+  h1 { font-size: 1.2rem; margin: 6px 4px 2px; } .at { color: #777; font-size: .85rem; margin: 0 4px 12px; }
+  section { background: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+  h2 { font-size: .95rem; margin: 0 0 8px; color: #555; }
+  ul { list-style: none; padding: 0; margin: 0; } li { padding: 5px 0; border-top: 1px solid rgba(128,128,128,.15); } li:first-child { border-top: 0; }
+  .big { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .muted { color: #888; }
+  @media (prefers-color-scheme: dark) { body { background: #161615; color: #eee; } section { background: #232321; } h2 { color: #aaa; } }
+</style>
+</head>
+<body>
+<main><h1>내 대시보드</h1><p class="at" id="at">불러오는 중…</p><div id="root"></div></main>
+<script>
+// dash.json은 AES-GCM으로 암호화돼 있고, 열쇠는 이 주소의 # 뒤에만 있다 (서버로 전송되지 않음).
+const b64 = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+function section(title, items, empty) {
+  const s = el("section"); s.append(el("h2", "", title));
+  if (typeof items === "string") { s.append(el("div", "big", items)); return s; }
+  const ul = el("ul"); (items && items.length ? items : [empty || "없음"]).forEach(t => ul.append(el("li", items && items.length ? "" : "muted", t)));
+  s.append(ul); return s;
+}
+async function main() {
+  const m = location.hash.match(/k=([A-Za-z0-9_-]+)/);
+  const at = document.getElementById("at");
+  if (!m) { at.textContent = "열쇠가 없는 주소예요. 디스코드에서 !dash 로 받은 링크로 열어 주세요."; return; }
+  try {
+    const res = await fetch("dash.json?" + Date.now(), { cache: "no-store" });
+    const enc = await res.json();
+    const key = await crypto.subtle.importKey("raw", b64(m[1]), "AES-GCM", false, ["decrypt"]);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(enc.iv) }, key, b64(enc.ct));
+    const d = JSON.parse(new TextDecoder().decode(plain));
+    at.textContent = d.at + " 기준";
+    const root = document.getElementById("root");
+    if (d.weather) root.append(section("날씨", d.weather));
+    root.append(section("오늘 일정", d.events));
+    root.append(section("할 일", d.tasks));
+    if (d.spend) root.append(section("이번 달 지출", d.spend));
+    if (d.spend_cats && d.spend_cats.length) root.append(section("분류별", d.spend_cats));
+    if (d.coupons && d.coupons.length) root.append(section("기프티콘", d.coupons));
+    if (d.cycles && d.cycles.length) root.append(section("생활 주기", d.cycles));
+    if (d.reading && d.reading.length) root.append(section("나중에 읽기", d.reading));
+    if (d.cost) root.append(section("비서 비용", d.cost));
+  } catch (e) { at.textContent = "대시보드를 열지 못했어요 (열쇠가 바뀌었거나 아직 올라오지 않았어요). !dash 로 새 링크를 받으세요."; }
+}
+main();
+</script>
+</body>
+</html>

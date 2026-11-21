@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>카드</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; margin: 0; background: #f4f4f1; color: #1c1c1a; }
+  main { max-width: 520px; margin: 0 auto; padding: 20px 16px 40px; }
+  .card { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  h1 { font-size: 1.35rem; margin: 0 0 6px; }
+  .when { font-size: 1.05rem; font-weight: 600; margin: 2px 0; }
+  .sub { color: #666; margin: 2px 0; white-space: pre-wrap; }
+  #map { height: 240px; border-radius: 12px; margin: 14px 0 4px; background: #e8e8e4; display: none; }
+  .btns { display: grid; gap: 8px; margin-top: 14px; }
+  button, a.btn { font: inherit; font-weight: 600; padding: 13px; border-radius: 12px; border: 0; text-align: center; text-decoration: none; cursor: pointer; }
+  .kakao { background: #fee500; color: #191600; }
+  .plain { background: #ecece8; color: #1c1c1a; }
+  ol { padding-left: 1.2rem; margin: 10px 0 0; } li { margin: 6px 0; }
+  .code { font-family: ui-monospace, monospace; font-size: 1.1rem; letter-spacing: .06em; text-align: center; margin: 10px 0; word-break: break-all; }
+  svg#bar { width: 100%; display: none; }
+  .err { color: #b00020; }
+  @media (prefers-color-scheme: dark) { body { background: #161615; color: #eee; } .card { background: #232321; } .sub { color: #aaa; } .plain { background: #33332f; color: #eee; } }
+</style>
+</head>
+<body>
+<main><div class="card" id="card"><p class="sub">불러오는 중…</p></div></main>
+<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.8.2/kakao.min.js" crossorigin="anonymous"></script>
+<script>
+// 카드 내용은 주소의 # 뒤(d=…)에만 들어 있다. 서버에는 아무것도 저장·전송되지 않는다.
+function decode() {
+  const m = location.hash.match(/d=([A-Za-z0-9_-]+)/);
+  if (!m) return null;
+  const bin = atob(m[1].replace(/-/g, "+").replace(/_/g, "/"));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
+}
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+function button(label, cls, fn) { const b = el("button", cls, label); b.onclick = fn; return b; }
+function link(label, href) { const a = el("a", "btn plain", label); a.href = href; a.target = "_blank"; a.rel = "noopener"; return a; }
+const mapTo = p => `https://map.kakao.com/link/to/${encodeURIComponent(p.n)},${p.y},${p.x}`;
+
+function initKakao(d) {
+  try { if (d.k && window.Kakao && !Kakao.isInitialized()) Kakao.init(d.k); return window.Kakao && Kakao.isInitialized(); }
+  catch (e) { return false; }
+}
+function showMap(d, points) {
+  if (!d.k || !points.length) return;
+  const s = document.createElement("script");
+  s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${d.k}&autoload=false`;
+  s.onload = () => kakao.maps.load(() => {
+    const box = document.getElementById("map"); box.style.display = "block";
+    const map = new kakao.maps.Map(box, { center: new kakao.maps.LatLng(points[0].y, points[0].x), level: 4 });
+    const bounds = new kakao.maps.LatLngBounds();
+    points.forEach((p, i) => {
+      const pos = new kakao.maps.LatLng(p.y, p.x); bounds.extend(pos);
+      new kakao.maps.Marker({ map, position: pos, title: p.n });
+      new kakao.maps.CustomOverlay({ map, position: pos, yAnchor: 2.4,
+        content: `<div style="background:#fff;color:#111;border-radius:8px;padding:2px 7px;font-size:12px;box-shadow:0 1px 3px rgba(0,0,0,.3)">${points.length > 1 ? (i + 1) + ". " : ""}${p.n.replace(/[<>&]/g, "")}</div>` });
+    });
+    if (points.length > 1) map.setBounds(bounds);
+  });
+  document.head.appendChild(s);
+}
+function share(d, text) {
+  const url = location.href;
+  Kakao.Share.sendDefault({ objectType: "text", text: text.slice(0, 190), link: { mobileWebUrl: url, webUrl: url }, buttonTitle: "자세히 보기" });
+}
+function navi(p) { Kakao.Navi.start({ name: p.n, x: p.x, y: p.y, coordType: "wgs84" }); }
+
+function render(d) {
+  const card = document.getElementById("card"); card.textContent = "";
+  const ok = initKakao(d);
+  document.title = d.title || "카드";
+  card.append(el("h1", "", d.title || ""));
+  if (d.when) card.append(el("p", "when", "🕒 " + d.when));
+  const p = d.place;
+  if (p) card.append(el("p", "sub", "📍 " + p.n + (p.a ? "\n" + p.a : "")));
+  if (d.note) card.append(el("p", "sub", d.note));
+  if (d.t === "coupon") {
+    if (d.exp) card.append(el("p", "when", "⏳ " + d.exp + " 까지"));
+    if (d.code) {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.id = "bar"; card.append(svg);
+      card.append(el("p", "code", d.code));
+      const js = document.createElement("script");
+      js.src = "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js";
+      js.onload = () => { try { JsBarcode("#bar", d.code.replace(/[\s-]/g, ""), { format: "CODE128", displayValue: false, height: 70, margin: 6 }); svg.style.display = "block"; } catch (e) {} };
+      document.head.appendChild(js);
+      card.append(el("p", "sub", "바코드는 번호로 다시 그린 것이라 매장에 따라 번호 입력이 필요할 수 있어요."));
+    }
+  }
+  if (d.pts && d.pts.length) {
+    const ol = el("ol");
+    d.pts.forEach(q => { const li = el("li", "", (q.t ? q.t + "  " : "") + q.n + (q.m ? "  — " + q.m : "")); ol.append(li); });
+    card.append(ol);
+  }
+  card.append(Object.assign(el("div"), { id: "map" }));
+  showMap(d, d.pts && d.pts.length ? d.pts : (p ? [p] : []));
+  const btns = el("div", "btns");
+  if (p) {
+    if (ok) btns.append(button("🚗 카카오내비로 길 안내", "kakao", () => navi(p)));
+    btns.append(link("🚌 카카오맵 길찾기 (대중교통·도보)", mapTo(p)));
+  }
+  (d.pts || []).slice(0, 6).forEach(q => { if (!p) btns.append(link("길찾기: " + q.n, mapTo(q))); });
+  if (ok && d.t !== "go") {
+    const text = [d.title, d.when && "🕒 " + d.when, p && "📍 " + p.n, d.t === "coupon" && d.exp && "⏳ " + d.exp + " 까지"].filter(Boolean).join("\n");
+    btns.append(button("💬 카카오톡으로 공유", "kakao", () => share(d, text)));
+  }
+  if (!ok) btns.append(el("p", "sub err", "카카오 버튼을 쓸 수 없어요 (JavaScript 키 또는 도메인 등록 확인)."));
+  card.append(btns);
+}
+try { const d = decode(); if (d) render(d); else document.getElementById("card").textContent = "카드 정보가 없는 주소예요."; }
+catch (e) { document.getElementById("card").textContent = "카드를 읽지 못했어요."; }
+</script>
+</body>
+</html>
