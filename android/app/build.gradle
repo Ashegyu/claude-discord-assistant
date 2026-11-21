@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 서명 키: 환경변수로 받으면 그 키로, 없으면 빌드 때 만들어지는 디버그 키로 서명한다.
+// (디버그 키는 빌드마다 달라서, 새 버전을 깔 때 기존 앱을 지우고 설치해야 한다.)
+def ksFile = System.getenv("PAYSMS_KEYSTORE_FILE")
+
+android {
+    namespace 'kr.ashegyu.paysms'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "kr.ashegyu.paysms"
+        minSdk 26
+        targetSdk 34
+        versionCode((System.getenv("GITHUB_RUN_NUMBER") ?: "1") as int)
+        versionName "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+    }
+
+    signingConfigs {
+        release {
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword System.getenv("PAYSMS_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("PAYSMS_KEY_ALIAS") ?: "paysms"
+                keyPassword System.getenv("PAYSMS_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ksFile ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}

@@ -1,0 +1,187 @@
+# ─────────────────────────────────────────────
+# Claude 디스코드 비서 설정 (비밀값은 .env)
+# ─────────────────────────────────────────────
+timezone: Asia/Seoul
+
+models:
+  router: claude-haiku-5-5        # 1. 메시지 분류 (빠른 길 / 깊은 길)
+  quick: claude-haiku-5-5         # 2a. 빠른 길 지휘자
+  deep: claude-sonnet-5-5         # 2b. 깊은 길 지휘자
+  advisor: claude-opus-5-5        # 지휘자가 막히거나 계획이 필요할 때 조언
+  worker: claude-haiku-5-5        # 3. 전문 에이전트 (메일·일정·개발·조사)
+  batch: claude-haiku-5-5         # 4. 배치 (야간 메일 요약, 대량 작업) — 50% 할인
+
+advisor:
+  quick_max_uses: 1               # 한 턴에 조언 호출 상한
+  deep_max_uses: 3
+  max_tokens: 2048                # 문서 권장 시작점 (조언 출력 약 7배 감소, 잘림 거의 없음)
+
+conversation:
+  keep_turns: 12                  # 채널별로 기억하는 최근 대화 턴 수
+  max_tool_rounds: 12             # 지휘자 한 턴의 도구 호출 반복 상한
+  worker_max_rounds: 8
+
+mail:
+  poll_seconds: 120               # 새 메일 확인 주기
+  alert_min: important            # 이 등급 이상만 즉시 알림 (urgent / important / normal)
+  vip_senders: []                 # 항상 중요로 볼 보낸 사람 (예: boss@company.com)
+  ignore_senders: []              # 항상 무시
+  nightly_digest: "21:07"         # 하루치 메일 요약 (배치) 보내는 시각
+
+github:
+  repos: []                    # 비서가 읽을 내 저장소들 (!set github.repos [내아이디/저장소])
+  workflows:                      # 실행 가능한 워크플로 (확인 버튼 후 실행)
+    playtest: {repo: your-github-id/claude-discord-assistant, file: playtest.yml, inputs: {url: ""}}
+
+notion:
+  devlog_database_id: ""
+  memo_parent_page_id: ""  # "비서 메모" 페이지 (통합 연결 필요)
+  expense_database_id: ""  # "비서 메모" 아래 "지출" DB (영수증 기록)
+  readlater_database_id: ""  # "비서 메모" 아래 "나중에 읽기" DB
+  books_database_id: ""  # "비서 메모" 아래 "독서" DB
+
+screenshot:                       # 사진만 보내면 → 분류·추출 → 버튼 (캘린더 / 할 일 / 메모 / 지출)
+  model: claude-haiku-5-5
+  coupon_notice_days: 3           # 기프티콘 만료 며칠 전에 To Do 알림
+
+weather:
+  default_place: Busan
+
+todo:                             # Microsoft To Do ⇄ 갤럭시 삼성 리마인더 (MS_CLIENT_ID + data/ms_token.json 있으면 켜짐)
+  enabled: true
+  list_name: ""                   # 삼성 리마인더와 동기화한 To Do 목록 이름 (비우면 기본 '작업' 목록)
+  discord_too: false              # To Do 등록 시 디스코드 알림도 같이 받을지
+  morning_brief: ""               # (예전 설정) 이제 아래 briefing.time을 써요
+
+library:                          # 문서 서재: 쪽 단위 텍스트 검색 → 필요한 쪽만 Claude에게
+  answer_model: claude-sonnet-5-5 # 질의응답 (정확도 우선)
+  summary_model: claude-haiku-5-5 # 업로드 요약(앞 8쪽만), 검색어 확장
+  auto_summary: true
+  top_pages: 8                    # 질문당 점수 상위 쪽 수 (상위 3쪽은 다음 쪽도 함께)
+  neighbor_pages: 1
+  max_context_chars: 60000        # 질문당 보내는 텍스트 상한 (약 1.5~2만 토큰)
+  visual_min_chars: 300           # 이보다 텍스트가 적은 쪽은 그림·표로 보고 원본 PDF로도 보여줌
+  visual_max_pages: 4             # 질문당 원본 PDF로 보여줄 최대 쪽 수
+  text_chunk_chars: 3000          # 텍스트 파일을 이 길이씩 '쪽'으로 나눔
+  max_docs_per_question: 3
+  text_inline_max: 30000          # 이보다 큰 텍스트 파일은 서재로 (작으면 대화에 바로 붙임)
+
+batch:
+  poll_seconds: 120
+
+renewals:                         # 재발급 알림 (매일 check_time에 토큰 점검 + D-14·7·3·1·0 알림)
+  check_time: "09:07"
+  warn_days: [14, 7, 3, 1, 0]
+  # 비서가 쓰는 GitHub 토큰은 만료일 자동 감지, Microsoft·구글·카카오(비서) 토큰은 매일 갱신 점검 → 여기 안 적어도 됨
+  # 재발급 후 디스코드에서 !renewed 키 [날짜] 로 기록하면 아래 값보다 우선
+  items:
+    - key: kakao-digest
+      label: 카카오 리프레시 토큰 (daily-digest)
+      every_days: 55              # 리프레시 토큰 유효기간 약 2개월 → 여유 두고 55일
+      last: ""                    # 마지막 발급일 YYYY-MM-DD
+      how: "PC에서 daily-digest의 python kakao_init.py → GitHub Secrets KAKAO_REFRESH_TOKEN 교체"
+    - key: gh-pat
+      label: GitHub GH_PAT (daily-digest)
+      expires: ""                 # 만료일 YYYY-MM-DD (GitHub → Settings → Developer settings → Tokens에서 확인)
+      how: "GitHub에서 Regenerate → daily-digest Secrets GH_PAT 교체"
+
+self_improve:                     # 주간 자기 개선: 기록 분석 → 프롬프트·도구 설명·설정 수정 PR (자동 병합 없음)
+  enabled: true
+  weekly: "Sun 22:37"             # 요일(Mon~Sun) 시각
+  repo: your-github-id/claude-discord-assistant
+  model: claude-sonnet-5-5
+  min_turns: 10                   # 대화가 이보다 적은 주는 건너뜀
+
+playtest:                         # AI 플레이테스터 (GitHub Actions에서 실행, 결과는 디스코드 웹후크로)
+  url: ""                         # 플레이테스트할 웹 게임 주소
+  repo: your-github-id/claude-discord-assistant
+  workflow: playtest.yml
+  steps: 60                       # 행동 턴 수 (데스크톱·모바일이 나눠 씀). 1회 Sonnet 토큰은 대략 턴 수 × 3천
+  viewports: desktop,mobile
+  auto: false                     # true면 30분마다 페이지를 확인해 바뀌면(새 배포) 자동 실행
+
+expenses:                         # 지출 리포트 (Notion 지출 DB 집계, Claude 안 씀)
+  weekly: "Mon 08:47"             # 지난주 (월~일)
+  monthly: "1 08:52"              # 매월 1일, 지난달
+  budgets: {}                     # 분류별 월 예산(원), 예: {식비: 400000, 카페: 80000} → 80%·100% 넘으면 기록할 때 알림
+
+paysms:                           # 카드 결제 문자 → 지출 자동 기록 (폰의 전달 앱 android/ 이 전용 채널 웹후크로 문자를 보냄)
+  enabled: false                  # 켜기: !set paysms.channel_id … / !set paysms.webhook_id … / !set paysms.enabled true → !restart
+  channel_id: 0                   # 결제 문자 전용 디스코드 채널 ID
+  webhook_id: 0                   # 그 채널 웹후크의 ID (웹후크 주소 …/webhooks/<여기 숫자>/<토큰>). 토큰은 적지 않는다
+  dedupe_minutes: 10              # 같은 금액이 이 시간 안에 또 오면 기록하지 않고 물어봄
+  cancel_lookback_days: 45        # 취소 문자가 오면 이 기간 안의 같은 금액 기록을 찾아 지움
+  model: claude-haiku-5-5         # 가맹점 정리·분류 (처음 보는 가맹점만, 이후는 기억)
+
+readlater:                        # 링크만 보내면 요약 → Notion "나중에 읽기"
+  model: claude-haiku-5-5
+  weekly: "Sat 09:47"             # 안 읽은 것 목록
+
+budget:                           # 크레딧 가드 (봇이 쓴 Claude API 비용만, GitHub Actions 쪽은 제외)
+  monthly_usd: 100
+  warn_ratio: 0.8                 # 80%에서 경고
+  daily_web_searches: 50          # 하루 웹 검색 상한 (검색 1회 $0.01). 0이면 무제한
+  search_usd_per_1k: 10
+  save_mode: true                 # 100% 넘으면 절약 모드 (깊은 모드·어드바이저·플레이테스트·자기 개선 멈춤), !budget off로 해제
+  prices: {}                      # 가격 덮어쓰기 (USD/100만 토큰), 비우면 assistant/costs.py 기본값
+
+backup:                           # 구글 드라이브 'claude-assistant-backup' 폴더 (drive.file 권한 필요)
+  weekly: "Sun 04:17"
+  keep: 8
+
+commute:                          # 출발 알림 (장소 있는 캘린더 일정 → 카카오 대중교통·자동차, Claude 안 씀)
+  enabled: true
+  modes: [transit, car]
+  work_days: [0, 1, 2, 3, 4]      # 월~금 (0=월)
+  work_hours: "09:00-18:00"       # 이 시간엔 회사에서, 그 외엔 집에서 출발로 계산 (!origin으로 오늘만 바꿈)
+  buffer_min: 10                  # 도착 여유
+  lead_min: 15                    # 출발 시각 몇 분 전에 알릴지
+  lookahead_hours: 4
+  min_distance_m: 400             # 이보다 가까우면 알리지 않음
+
+weekly_review:                    # 나의 한 주 (디스코드 + Notion 비서 메모)
+  weekly: "Sun 21:07"
+  model: claude-sonnet-5-5
+  save_notion: true
+
+alerts:                           # 알림 정리: urgent는 언제든, normal은 조용한 시간이면 모아둠, low는 항상 모아둠
+  enabled: true
+  quiet: "23:00-07:00"
+  focus: []                       # 집중 시간 (예: ["09:30-11:30"]) — 이때도 급한 것만
+  digest: ["12:30", "18:30"]      # 모아둔 알림 보내는 시각 (아침 몫은 브리핑에 포함)
+
+briefing:                         # 통합 아침 브리핑 (날씨·미세먼지·일정·첫 출발·할 일·교체 주기·만료 쿠폰·밤사이 알림)
+  enabled: true
+  time: "07:47"
+
+pages:                            # 웹 카드·대시보드 (GitHub Pages, site/ 폴더 → gh-pages 브랜치)
+  base_url: https://your-github-id.github.io/claude-discord-assistant
+  repo: your-github-id/claude-discord-assistant
+  branch: gh-pages
+  dash_hourly: true               # !dash를 한 번 쓴 뒤로는 07~23시 매시간 내용이 바뀌면 갱신
+
+talkcal:                          # 구글 캘린더 → 카카오 톡캘린더 (카톡 일정 알림). talk_calendar 동의 + deploy/kakao_auth.py 후 true
+  enabled: false
+  days: 14
+  read: true                      # 카톡에서 만든 일정도 읽어서 브리핑·출발 알림·일정 조회에 포함 (enabled가 true일 때)
+
+busan:                            # 부산 실시간 (DATA_GO_KR_KEY 필요: 버스 도착·기상 특보)
+  place: 부산시청                  # 날씨·파도 기준 위치 (동네 이름으로 바꾸세요)
+  region: 부산
+  warnings: true                  # 새 특보 알림
+
+birthdays:                        # 구글 주소록 생일·기념일 (contacts.readonly 권한) — 당일 알림
+  enabled: true
+  time: "08:07"
+
+youtube:                          # 구독 채널 새 영상 묶음 (youtube.readonly 권한)
+  enabled: true
+  time: "19:00"
+  summary: true                   # 영상마다 한 줄 요약 (Haiku 한 번 호출로 전부)
+  skip_shorts: true               # 60초 이하·#shorts 제외
+  max_videos: 25
+  model: claude-haiku-5-5
+
+expense_sheet:                    # Notion 지출 → 구글 시트 "지출 (비서)" (drive.file 권한)
+  enabled: true
+  time: "04:37"
