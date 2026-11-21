@@ -1,0 +1,15 @@
+# 사용법은 docs/setup-guide.md 의 "5단계 · Docker로 설치하기" 참고.
+services:
+  assistant:
+    build: .
+    image: claude-assistant
+    container_name: claude-assistant
+    restart: unless-stopped        # !restart·!update 때 프로세스가 끝나면 다시 켜짐
+    volumes:
+      - .:/app                      # 저장소 폴더 그대로 (코드·.env·data·config.local.yaml)
+    environment:
+      TZ: Asia/Seoul
+    mem_limit: 700m                 # 1GB VM에서 다른 프로세스 몫을 남겨 둠
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "3"}

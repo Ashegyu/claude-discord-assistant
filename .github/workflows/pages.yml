@@ -1,0 +1,25 @@
+name: pages
+# site/ 폴더만 gh-pages 브랜치로 올린다 (docs/ 등 다른 파일은 공개되지 않음). 봇이 올린 dash.json(암호화)은 유지.
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gh-pages로 배포
+        run: |
+          mkdir out && cp -r site/. out/ && touch out/.nojekyll
+          if git fetch origin gh-pages 2>/dev/null; then git show origin/gh-pages:dash.json > out/dash.json 2>/dev/null || rm -f out/dash.json; fi
+          cd out && git init -q -b gh-pages
+          git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "deploy site ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" gh-pages

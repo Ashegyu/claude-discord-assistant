@@ -1,0 +1,30 @@
+name: docker
+
+# Docker 설치 방식이 깨지지 않았는지 확인: 이미지 빌드 → 그 안에서 패키지 불러오기·오프라인 테스트.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "deploy/docker-entrypoint.sh", "requirements.txt", ".github/workflows/docker.yml"]
+  pull_request:
+    paths: ["Dockerfile", "docker-compose.yml", ".dockerignore", "deploy/docker-entrypoint.sh", "requirements.txt"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: 이미지 빌드
+        run: docker build -t claude-assistant .
+      - name: compose 파일 검사
+        run: docker compose config -q
+      - name: 진입 스크립트가 .env 없을 때 멈추는지
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/app" claude-assistant python -c "print('should not run')" ; code=$?
+          test $code -ne 0
+      - name: 컨테이너 안에서 오프라인 테스트
+        run: |
+          cp .env.example .env
+          docker run --rm -v "$PWD:/app" claude-assistant sh -c "pip install -q pytest && python -c 'import assistant.bot' && python -m pytest -q tests/"

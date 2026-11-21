@@ -1,0 +1,72 @@
+name: android
+
+# 결제 문자 전달 앱(android/) APK 빌드. 결과는 Releases의 "paysms-app" 에 올라간다.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      # 서명 키(선택): 저장소 Secrets에 PAYSMS_KEYSTORE_B64 / PAYSMS_KEYSTORE_PASSWORD 가 있으면 그 키로 서명한다.
+      # 없으면 빌드마다 새로 만들어지는 디버그 키로 서명 → 새 버전을 깔 때 기존 앱을 지우고 설치해야 한다.
+      - name: 서명 키 준비
+        env:
+          KS_B64: ${{ secrets.PAYSMS_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/paysms.jks"
+            echo "PAYSMS_KEYSTORE_FILE=$RUNNER_TEMP/paysms.jks" >> "$GITHUB_ENV"
+            echo "고정 서명 키 사용"
+          else
+            echo "고정 서명 키 없음 → 디버그 키로 서명"
+          fi
+
+      - name: 빌드
+        env:
+          PAYSMS_KEYSTORE_PASSWORD: ${{ secrets.PAYSMS_KEYSTORE_PASSWORD }}
+        run: gradle -p android :app:assembleRelease --no-daemon --stacktrace
+
+      - name: APK 이름 정리
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/*.apk "out/paysms-${{ github.run_number }}.apk"
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paysms-apk
+          path: out/*.apk
+          retention-days: 30
+
+      - name: Releases에 올리기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view paysms-app >/dev/null 2>&1 || \
+            gh release create paysms-app --title "결제 문자 전달 앱" --notes "android/ 폴더의 앱. 아래 APK 중 번호가 가장 큰 것이 최신이에요." --latest=false
+          gh release upload paysms-app out/*.apk --clobber

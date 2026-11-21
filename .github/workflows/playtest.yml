@@ -1,0 +1,41 @@
+name: playtest
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 게임 주소
+        required: true
+      goal:
+        description: 테스트 목표
+        default: 처음부터 플레이하며 버그·불편·밸런스 문제를 찾아라
+      steps:
+        description: 행동 턴 수 (화면 크기들이 나눠 씀)
+        default: "60"
+      viewports:
+        description: desktop,mobile
+        default: desktop,mobile
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q "anthropic>=2.10" httpx playwright && python -m playwright install --with-deps chromium
+      - name: 플레이테스트
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PT_URL: ${{ inputs.url }}
+          PT_GOAL: ${{ inputs.goal }}
+          PT_STEPS: ${{ inputs.steps }}
+          PT_VIEWPORTS: ${{ inputs.viewports }}
+        run: python playtest/run.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playtest-out
+          path: playtest-out/
+          retention-days: 14
